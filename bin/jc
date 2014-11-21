@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import re
+import subprocess
+import getopt
+
+def get_project_root(dir):
+    if 'pom.xml' in os.listdir(dir):
+        return (os.path.realpath(dir))
+    else:
+        pardir = os.path.join(os.pardir, dir)
+        if os.path.abspath(dir) == os.path.abspath(pardir):
+            raise Exception('pom.xml not found.')
+        return get_project_root(pardir)
+
+
+def get_classpath(project_root_path):
+    _JCRC_PATH = os.path.join(project_root_path, '.jcrc')
+    _POM_PATH = os.path.join(project_root_path, 'pom.xml')
+
+    def _run_mvn():
+        mvn_result = subprocess.Popen(['mvn', '-f', os.path.join(project_root_path, 'pom.xml'),
+                                       'dependency:build-classpath'],
+                                      stdout=subprocess.PIPE).communicate()[0]
+
+        m = re.search(r'Dependencies classpath:\n(.*)\n', mvn_result.decode('UTF-8'))
+        build_classpath = os.path.join(project_root_path, 'src/main/java') + ':' + \
+                          os.path.join(project_root_path, '\src/main/resources') + ':' + \
+                          os.path.join(project_root_path, 'target/classes') + ':' + \
+                          m.group(1)
+
+        propf = open(os.path.join(project_root_path, '.jcrc'), 'w')
+        propf.write(build_classpath)
+        propf.close()
+        print('Created .jcrc to cache classpath')
+
+    if not os.path.exists(_JCRC_PATH):
+        print('.jcrc not found. run Maven...')
+        _run_mvn()
+
+    elif os.stat(_JCRC_PATH).st_mtime < os.stat(_POM_PATH).st_mtime:
+        print('.jcrc is outdated, run Maven...')
+        _run_mvn()
+
+    return open(_JCRC_PATH, 'r').read()
+
+
+def print_usage():
+    print("""Usage: jc <Java source file>""")
+
+
+if __name__ == '__main__':
+    optlist, args = getopt.getopt(sys.argv[1:], '')
+    if (len(args) < 1):
+        print_usage()
+        exit()
+
+    PROJECT_ROOT_PATH = get_project_root(os.curdir)
+    BUILD_CLASSPATH = get_classpath(PROJECT_ROOT_PATH)
+    TARGET_CLASSES_PATH = os.path.join(PROJECT_ROOT_PATH, 'target/classes/')
+
+    if not os.path.exists(TARGET_CLASSES_PATH):
+       os.makedirs(TARGET_CLASSES_PATH)
+
+    JAVAC_RESULT = subprocess.Popen(['javac',
+                                     '-cp', BUILD_CLASSPATH,
+                                     '-d', TARGET_CLASSES_PATH, args[0]],
+                                    stdout=subprocess.PIPE).communicate()[0]
+
+    print(JAVAC_RESULT)

@@ -6,11 +6,12 @@ import re
 import subprocess
 import getopt
 
+
 def get_project_root(dir):
     if 'pom.xml' in os.listdir(dir):
-        return (os.path.realpath(dir))
+        return (os.path.abspath(dir))
     else:
-        pardir = os.path.join(os.pardir, dir)
+        pardir = os.path.abspath(os.path.join(dir, os.pardir))
         if os.path.abspath(dir) == os.path.abspath(pardir):
             raise Exception('pom.xml not found.')
         return get_project_root(pardir)
@@ -21,15 +22,20 @@ def get_classpath(project_root_path):
     _POM_PATH = os.path.join(project_root_path, 'pom.xml')
 
     def _run_mvn():
-        mvn_result = subprocess.Popen(['mvn', '-f', os.path.join(project_root_path, 'pom.xml'),
-                                       'dependency:build-classpath'],
-                                      stdout=subprocess.PIPE).communicate()[0]
+        mvn_result = subprocess.Popen(
+            ['mvn', '-f',
+             os.path.join(project_root_path, 'pom.xml'),
+             'dependency:build-classpath'],
+            stdout=subprocess.PIPE).communicate()[0]
 
-        m = re.search(r'Dependencies classpath:\n(.*)\n', mvn_result.decode('UTF-8'))
-        build_classpath = os.path.join(project_root_path, 'src/main/java') + ':' + \
-                          os.path.join(project_root_path, '\src/main/resources') + ':' + \
-                          os.path.join(project_root_path, 'target/classes') + ':' + \
-                          m.group(1)
+        m = re.search(
+            r'Dependencies classpath:\n(.*)\n', mvn_result.decode('UTF-8'))
+
+        build_classpath = \
+            os.path.join(project_root_path, 'src/main/java') + ':' + \
+            os.path.join(project_root_path, 'src/main/resources') + ':' + \
+            os.path.join(project_root_path, 'target/classes') + ':' + \
+            m.group(1)
 
         propf = open(os.path.join(project_root_path, '.jcrc'), 'w')
         propf.write(build_classpath)
@@ -57,16 +63,22 @@ if __name__ == '__main__':
         print_usage()
         exit()
 
-    PROJECT_ROOT_PATH = get_project_root(os.curdir)
+    java_files = [f for f in args if os.path.exists(f)]
+    if (len(java_files) == 0):
+        raise Exception("No such file")
+
+    PROJECT_ROOT_PATH = get_project_root(
+        os.path.dirname(os.path.abspath(java_files[0])))
     BUILD_CLASSPATH = get_classpath(PROJECT_ROOT_PATH)
     TARGET_CLASSES_PATH = os.path.join(PROJECT_ROOT_PATH, 'target/classes/')
 
     if not os.path.exists(TARGET_CLASSES_PATH):
-       os.makedirs(TARGET_CLASSES_PATH)
+        os.makedirs(TARGET_CLASSES_PATH)
 
     JAVAC_RESULT = subprocess.Popen(['javac',
                                      '-cp', BUILD_CLASSPATH,
-                                     '-d', TARGET_CLASSES_PATH, args[0]],
+                                     '-d', TARGET_CLASSES_PATH,
+                                     ' '.join(java_files)],
                                     stdout=subprocess.PIPE).communicate()[0]
 
     print(JAVAC_RESULT)

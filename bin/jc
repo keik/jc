@@ -54,8 +54,8 @@ def get_classpath(project_root_path):
 
 
 def compile_(file_name):
-
     if not path.exists(file_name):
+        print("No such file %s" % file_name)
         return
 
     file_path = path.abspath(file_name)
@@ -69,20 +69,24 @@ def compile_(file_name):
     if not path.exists(TARGET_CLASSES_DIR_PATH):
         os.makedirs(TARGET_CLASSES_DIR_PATH)
 
-    JAVAC_RESULT = subprocess.Popen(['javac',
-                                     '-cp', get_classpath(PROJECT_ROOT_PATH),
-                                     '-d', TARGET_CLASSES_DIR_PATH,
-                                     file_name],
-                                    stdout=subprocess.PIPE).communicate()[0]
+    javac_proc = subprocess.Popen(['javac',
+                                   '-cp', get_classpath(PROJECT_ROOT_PATH),
+                                   '-d', TARGET_CLASSES_DIR_PATH,
+                                   file_name],
+                                  stdout=subprocess.PIPE)
 
-    print(JAVAC_RESULT)
+    JAVAC_RESULT = javac_proc.communicate()[0]
+    if not javac_proc.returncode == 0:
+        print(JAVAC_RESULT)
+        exit(javac_proc.returncode)
 
 
 def compile_and_test(file_name):
-    compile_(file_name)
-
     if not path.exists(file_name):
+        print("No such file %s" % file_name)
         return
+
+    compile_(file_name)
 
     file_path = path.abspath(file_name)
 
